@@ -1,46 +1,197 @@
 '''
-Created on 06.06.2014
-
-@author: chm
+    Created on 06.06.2014
+    
+    @author: chm
 '''
-
-def toRsT(schema):
-    RsT=''
-    subschema=schema['properties']
-    for key in subschema.keys():
+import json
+import collections
+class jsonschematorst:
+    def __init__(self,schemapath):
+        
+        self.schema=json.load(
+                                    open(schemapath),
+                                    object_pairs_hook=collections.OrderedDict
+                                    )
+    def toRsT(self,schema=None, jsonpath='',key=''):
+        if schema is None:
+            schema=self.schema
+        if jsonpath=='':
+            jsonpath+=":ref:`#/ <root>` "
+        RsT=''
+        if '$schema'in schema:
+            RsT+=".. _root:"
+            RsT+="\n\n=======================\nJSON Configuration File\n=======================\n\n"
+            
+        
+        RsT+=self.typetoRST(schema,"",jsonpath)+"\n"
+        RsT+=self.serialisejson(self.makejsonexample(schema,key))
+        if 'properties'in schema:
+            subschema=schema['properties']
+            RsT+=self.makesection(subschema,jsonpath)
+        if 'oneOf'in schema:
+            subschema=schema['oneOf']
+            for oneschema in subschema:
+                RsT+=self.makesection(oneschema,jsonpath)
+            
+        return RsT
+        
+    def typetoRST(self,typedic,key,jsonpath):
+        
+        rst=''
+        if 'description' in typedic:
+            rst+=""+self.printdesc(typedic['description'])+'\n\n'
+        if "type" in typedic:    
+            if typedic['type']=='array':
+                    rst+=self.arraytoRST(typedic)
+            else:
+                rst+=":Type:\n  "+typedic['type']
+                if 'units'in typedic:
+                    rst+=" in "+ typedic['units']
+        else:
+            rst+=':type:\n  object\n\n'
+        rst+='\n'
+        if 'enum' in typedic:
+            rst+=":values:\n  "+str(typedic["enum"])+"\n\n"
+        if 'properties' in typedic:
+            rst+=":Contains:\n  "
+            proploop=0
+            for prop in typedic['properties'].keys():
+                if "$ref" in typedic['properties'][prop]:
+                    rst+=':ref:`'+prop+"<"+self.getid(self.schema['definitions'],prop)+">`"
+                else:
+                    rst+=':ref:`'+prop+" <"+self.getid(typedic['properties'],prop)+'>`'
+                if "required" in typedic['properties'][prop]:
+                    if typedic['properties'][prop]['required']:
+                        rst+=":ref:`*<required>`"
+                proploop+=1
+                if proploop!=len(typedic['properties'].keys()):
+                    rst+=', '
+                else:
+                    rst+='\n'
+        
+        
+        if 'oneOf' in typedic:
+            rst+=":Contains:\n one of  "
+            proploop=0
+            for oneofschema in typedic['oneOf']:
+                for key in oneofschema.keys():
+                    rst+=':ref:`'+key+'`'
+                    proploop+=1
+                    if proploop!=len(typedic['oneOf']):
+                        rst+=', '
+                    else:
+                        rst+='\n'
+        
+        
+        
+        if 'required' in typedic:
+            rst+=":Required:\n  "+str (typedic['required'])+'\n'
+        else:
+            rst+=":Required:\n  "+str (False)+'\n'
+    
+        if 'default'in typedic:
+            rst+=":Default:\n  " +str(typedic['default'])+'\n'
+        
+        rst+=":JSON Path:\n  "+jsonpath+"\n"
        
-        RsT+="Property:"+key+"\n"
-        RsT+=typetoRST(subschema[key])+"\n"
-        if 'properties' in subschema[key]:
-            RsT+=toRsT(subschema[key])
-        
-    return RsT
+        return rst
     
-def typetoRST(typedic):
-    rst=''
-    if 'description' in typedic:
-        rst+=typedic['description']+'\n'
+    def arraytoRST(self,typedic):
+        rst=u''
+        rst+=':Type:\n  array('+str(typedic['maxItems'])+')'
+        rst+=" items: "
+        for item in typedic['items']:
+            rst+=item['type']+" "
+            
+        return rst
+    def printdesc(self,desc):
+        rst=""
         
-    if typedic['type']=='array':
-            rst+=arraytoRST(typedic)
-    else:
-        rst+="  Type:"+typedic['type']
-        if 'units'in typedic:
-            rst+=" in "+ typedic['units']
-        
-    rst+='\n'
+        rst+=desc+'\n'
+        return rst
+    def addkeytojsonpath(self,jsonpath,key,ids):
+        return jsonpath+"[':ref:`"+key+" <"+ ids +">`']"
     
-    if typedic['required']==True:
-        rst+="  required\n"
-    else:
-        rst+="  defaultvalue: " +typedic['default']
-    return rst
-
-def arraytoRST(typedic):
-    rst=u''
-    rst+='array('+str(typedic['maxItems'])+')'
-    rst+=" items: "
-    for item in typedic['items']:
-        rst+=item['type']+" "
+    def getid(self,typeo,key):
+        if 'id' in typeo[key]:
+            return typeo[key]["id"]
+        else:
+            return key
+    def indent(self,lines, amount, ch=' '):
+        padding = amount * ch
+        return padding + ('\n'+padding).join(lines.split('\n'))
+    def serialisejson(self,dictype):
+        rst="Example JSON: "
+        rst+="You can copy this code in you configuration file to the appropriate locations.\n\n"
+        rst+=".. code:: json\n\n"
+        jasonstr= json.dumps(dictype, separators=(',', ': '))
+        if len(jasonstr)>60:
+            jasonstr=json.dumps(dictype, indent=2,separators=(',', ': '))
+        rst+= self.indent(
+                    jasonstr
+                     ,4)+"\n\n"
+        return rst
+    
+    def makejsonexample(self,schema,key):
+        if key=="":
+            return self.gentypeexample(schema,key)
+        else:
+            return{key:self.gentypeexample(schema,key)}
         
-    return rst
+    def gentypeexample(self,schema,key):
+        dictype={}
+        
+        if "enum" in schema:
+            return schema['enum'][0]
+        else:
+            if "type" in schema:
+                if schema["type"]=="object":         
+                    dictype ={}
+                    if 'properties' in schema:
+                        for key in schema["properties"]:
+                            print key
+                            if "$ref" in schema["properties"][key]:
+                                refschema,refkey=self.resolveref(schema["properties"][key]["$ref"])
+                                dictype[refkey]=self.gentypeexample(refschema,key)
+                            elif 'required' in schema["properties"][key]:
+                                if schema["properties"][key]["required"]:
+                                    dictype[key]=self.gentypeexample(schema["properties"][key],key)
+                        
+                    return dictype
+                else:
+                    if schema["type"]=="number":
+                        return 0
+                    if schema["type"]=="string":
+                        return ""
+                    if schema['type']=="array":
+                        if 'minItems'in schema:
+                            return range(schema['minItems'])
+                    if schema['type']=="bool":
+                        if 'default'in schema:
+                            return schema["default"]
+                        else:
+                            return True
+            else:
+                return {}
+                    
+    
+    def makesection(self,oneschema,jsonpath):
+        RsT=""
+        for key in oneschema.keys():
+            if not '$ref' in oneschema[key]:
+                RsT+=".. _"+self.getid(oneschema,key)+':\n\n'+key+"\n"+"--------------------\n\n"
+                RsT+=self.toRsT(schema=oneschema[key],key=key,jsonpath=self.addkeytojsonpath(jsonpath,key,self.getid(oneschema,key)))
+               
+        return RsT   
+    def refstoRST(self):
+            jsonpath=""
+            return self.makesection(self.schema['definitions'],jsonpath)
+    def resolveref(self,ref):
+        
+        for key in self.schema['definitions']:
+            if self.schema['definitions'][key]["id"]==ref:
+                return self.schema['definitions'][key],key
+            
+        
+        
+        
