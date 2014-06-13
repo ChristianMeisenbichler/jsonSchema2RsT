@@ -13,14 +13,20 @@ class jsonschematorst:
                                     object_pairs_hook=collections.OrderedDict
                                     )
     def toRsT(self,schema=None, jsonpath='',key=''):
+        """
+        converts subschema to RST Markup
+        """
         if schema is None:
             schema=self.schema
-        if jsonpath=='':
+        if jsonpath=='': 
             jsonpath+=":ref:`#/ <root>` "
         RsT=''
         if '$schema'in schema:
-            RsT+=".. _root:"
+            RsT+=".. raw:: html\n\n    <style> .red {color:red} </style>\n\n"
+            RsT+=".. role:: red\n\n.. _root:"
+            
             RsT+="\n\n=======================\nJSON Configuration File\n=======================\n\n"
+            RsT+=".. _required:\n\n The ':red:`*`' signifies a required Field.\n\n"
             
         
         RsT+=self.typetoRST(schema,"",jsonpath)+"\n"
@@ -28,74 +34,84 @@ class jsonschematorst:
         if 'properties'in schema:
             subschema=schema['properties']
             RsT+=self.makesection(subschema,jsonpath)
-        if 'oneOf'in schema:
+        elif 'oneOf'in schema:
             subschema=schema['oneOf']
-            for oneschema in subschema:
-                RsT+=self.makesection(oneschema,jsonpath)
+            for oneschema in subschema:  
+                if 'properties'in oneschema:
+                    RsT+=self.makesection(oneschema['properties'], jsonpath)
+                else:
+                    RsT+=self.typetoRST(oneschema, key, jsonpath)
+                
             
         return RsT
         
     def typetoRST(self,typedic,key,jsonpath):
-        
         rst=''
-        if 'description' in typedic:
-            rst+=""+self.printdesc(typedic['description'])+'\n\n'
-        if "type" in typedic:    
-            if typedic['type']=='array':
-                    rst+=self.arraytoRST(typedic)
+        key=''
+        if True:
+          
+            if 'description' in typedic:
+                rst+=""+self.printdesc(typedic['description'])+'\n\n'
+            if "type" in typedic:    
+                if typedic['type']=='array':
+                        rst+=self.arraytoRST(typedic)
+                else:
+                    rst+=":Type:\n  "+typedic['type']
+                    if 'units'in typedic:
+                        rst+=" in "+ typedic['units']
             else:
-                rst+=":Type:\n  "+typedic['type']
-                if 'units'in typedic:
-                    rst+=" in "+ typedic['units']
-        else:
-            rst+=':type:\n  object\n\n'
-        rst+='\n'
-        if 'enum' in typedic:
-            rst+=":values:\n  "+str(typedic["enum"])+"\n\n"
-        if 'properties' in typedic:
-            rst+=":Contains:\n  "
-            proploop=0
-            for prop in typedic['properties'].keys():
-                if "$ref" in typedic['properties'][prop]:
-                    rst+=':ref:`'+prop+"<"+self.getid(self.schema['definitions'],prop)+">`"
-                else:
-                    rst+=':ref:`'+prop+" <"+self.getid(typedic['properties'],prop)+'>`'
-                if "required" in typedic['properties'][prop]:
-                    if typedic['properties'][prop]['required']:
-                        rst+=":ref:`*<required>`"
-                proploop+=1
-                if proploop!=len(typedic['properties'].keys()):
-                    rst+=', '
-                else:
-                    rst+='\n'
-        
-        
-        if 'oneOf' in typedic:
-            rst+=":Contains:\n one of  "
-            proploop=0
-            for oneofschema in typedic['oneOf']:
-                for key in oneofschema.keys():
-                    rst+=':ref:`'+key+'`'
+                rst+=':type:\n  object\n\n'
+            rst+='\n'
+            if 'enum' in typedic:
+                rst+=":values:\n  "+str(typedic["enum"])+"\n\n"
+            if 'properties' in typedic:
+                rst+=":Contains:\n  " 
+                proploop=0
+                for prop in typedic['properties'].keys():
+                    if "$ref" in typedic['properties'][prop]:
+                        rst+=':ref:`'+prop+"<"+typedic['properties'][prop]['$ref']+">`"
+                    else:
+                        rst+=':ref:`'+prop+" <"+self.getid(typedic['properties'],prop)+'>`'
+                    if "required" in typedic['properties'][prop]:
+                        if typedic['properties'][prop]['required']:
+                            rst+=":red:`*`"
                     proploop+=1
-                    if proploop!=len(typedic['oneOf']):
+                    if proploop!=len(typedic['properties'].keys()):
                         rst+=', '
                     else:
                         rst+='\n'
+            
+            
+            if 'oneOf' in typedic:
+                rst+=":Contains:\n one of  "
+                proploop=0
+                for oneofschema in typedic['oneOf']:
+                    if 'properties'in oneofschema:
+                        for key in oneofschema['properties'].keys():
+                          
+                            if key!="comment":
+                                proploop+=1    
+                                rst+=':ref:`'+key+'`'
+                                
+                                if proploop<len(typedic['oneOf']):
+                                    rst+=' or '
+                                else:
+                                    rst+='\n'
+                
+            
+            
+            if 'required' in typedic:
+                rst+=":Required:\n  "+str (typedic['required'])+'\n'
+            else:
+                rst+=":Required:\n  "+str (False)+'\n'
         
-        
-        
-        if 'required' in typedic:
-            rst+=":Required:\n  "+str (typedic['required'])+'\n'
-        else:
-            rst+=":Required:\n  "+str (False)+'\n'
-    
-        if 'default'in typedic:
-            rst+=":Default:\n  " +str(typedic['default'])+'\n'
-        
-        rst+=":JSON Path:\n  "+jsonpath+"\n"
-       
+            if 'default'in typedic:
+                rst+=":Default:\n  " +str(typedic['default'])+'\n'
+            
+            rst+=":JSON Path:\n  "+jsonpath+"\n"
+           
         return rst
-    
+
     def arraytoRST(self,typedic):
         rst=u''
         rst+=':Type:\n  array('+str(typedic['maxItems'])+')'
@@ -122,8 +138,8 @@ class jsonschematorst:
         return padding + ('\n'+padding).join(lines.split('\n'))
     def serialisejson(self,dictype):
         rst="Example JSON: "
-        rst+="You can copy this code in you configuration file to the appropriate locations.\n\n"
-        rst+=".. code:: json\n\n"
+        #rst+="You can copy this code in you configuration file to the appropriate locations.\n\n"
+        rst+="\n\n.. code:: json\n\n"
         jasonstr= json.dumps(dictype, separators=(',', ': '))
         if len(jasonstr)>60:
             jasonstr=json.dumps(dictype, indent=2,separators=(',', ': '))
@@ -136,14 +152,20 @@ class jsonschematorst:
         if key=="":
             return self.gentypeexample(schema,key)
         else:
-            return{key:self.gentypeexample(schema,key)}
+            return collections.OrderedDict([(key,self.gentypeexample(schema,key))])
         
     def gentypeexample(self,schema,key):
-        dictype={}
+        dictype=collections.OrderedDict()
         
         if "enum" in schema:
             return schema['enum'][0]
         else:
+            if 'oneOf' in schema:
+                for key in schema["oneOf"][0]['properties']:
+                    if "required" in schema["oneOf"][0]['properties'][key]:
+                        if schema["oneOf"][0]['properties'][key]['required']:
+                            dictype[key]=self.gentypeexample(schema["oneOf"][0]['properties'][key],key)
+                return dictype
             if "type" in schema:
                 if schema["type"]=="object":         
                     dictype ={}
@@ -151,28 +173,38 @@ class jsonschematorst:
                         for key in schema["properties"]:
                             print key
                             if "$ref" in schema["properties"][key]:
-                                refschema,refkey=self.resolveref(schema["properties"][key]["$ref"])
-                                dictype[refkey]=self.gentypeexample(refschema,key)
+                                if "required" in schema["properties"][key]:
+                                    if schema["properties"][key]["required"]:
+                                        refschema,refkey=self.resolveref(schema["properties"][key]["$ref"])
+                                        dictype[refkey]=self.gentypeexample(refschema,key)
                             elif 'required' in schema["properties"][key]:
                                 if schema["properties"][key]["required"]:
                                     dictype[key]=self.gentypeexample(schema["properties"][key],key)
-                        
-                    return dictype
+                        return dictype
                 else:
                     if schema["type"]=="number":
-                        return 0
+                        if 'default'in schema:
+                            return schema["default"]
+                        else:
+                            return 0
                     if schema["type"]=="string":
-                        return ""
+                        if 'default'in schema:
+                            return schema["default"]
+                        else:
+                            return ""
                     if schema['type']=="array":
-                        if 'minItems'in schema:
-                            return range(schema['minItems'])
+                        if 'default'in schema:
+                            return schema["default"]
+                        else:
+                            if 'minItems'in schema:
+                                return range(schema['minItems'])
                     if schema['type']=="bool":
                         if 'default'in schema:
                             return schema["default"]
                         else:
                             return True
             else:
-                return {}
+                return collections.OrderedDict([])
                     
     
     def makesection(self,oneschema,jsonpath):
