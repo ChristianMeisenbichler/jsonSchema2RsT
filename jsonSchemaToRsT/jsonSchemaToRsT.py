@@ -107,6 +107,15 @@ class jsonschematorst:
         
             if 'default'in typedic:
                 rst+=":Default:\n  " +str(typedic['default'])+'\n'
+            if "minimum"in typedic or "maximum" in typedic:
+                rst+=":Constraints:\n  "  
+                if "minimum" in typedic:
+                    rst+="min:"+ str(typedic["minimum"])
+                if "maximum" in typedic:
+                    rst+=",max:"+ str(typedic["maximum"])
+                rst+="\n\n"
+                    
+                 
             
             rst+=":JSON Path:\n  "+jsonpath+"\n"
            
@@ -156,19 +165,20 @@ class jsonschematorst:
         
     def gentypeexample(self,schema,key):
         dictype=collections.OrderedDict()
-        
+        #if "$ref" in schema:
+        #    schema,key=self.resolveref(schema)
         if "enum" in schema:
-            return schema['enum'][0]
+            return schema['enum'][0] 
         else:
             if 'oneOf' in schema:
                 for key in schema["oneOf"][0]['properties']:
-                    if "required" in schema["oneOf"][0]['properties'][key]:
-                        if schema["oneOf"][0]['properties'][key]['required']:
-                            dictype[key]=self.gentypeexample(schema["oneOf"][0]['properties'][key],key)
+                    if key!="comment":
+                        
+                        dictype[key]=self.gentypeexample(schema["oneOf"][0]['properties'][key],key)
                 return dictype
             if "type" in schema:
                 if schema["type"]=="object":         
-                    dictype ={}
+                    dictype ={} 
                     if 'properties' in schema:
                         for key in schema["properties"]:
                             print key
@@ -176,13 +186,19 @@ class jsonschematorst:
                                 if "required" in schema["properties"][key]:
                                     if schema["properties"][key]["required"]:
                                         refschema,refkey=self.resolveref(schema["properties"][key]["$ref"])
-                                        dictype[refkey]=self.gentypeexample(refschema,key)
+                                        dictype[key]=self.gentypeexample(refschema,refkey)
                             elif 'required' in schema["properties"][key]:
                                 if schema["properties"][key]["required"]:
                                     dictype[key]=self.gentypeexample(schema["properties"][key],key)
+                            if 'default' in schema:
+                                print "+++++++++++++++++++++++default",key 
+                                if schema['default'] ==key:
+                                    dictype[key]=self.gentypeexample(schema["properties"][key],key)
+                                   
                         return dictype
+                   
                 else:
-                    if schema["type"]=="number":
+                    if schema["type"]=="number" or schema["type"]=="integer":
                         if 'default'in schema:
                             return schema["default"]
                         else:
