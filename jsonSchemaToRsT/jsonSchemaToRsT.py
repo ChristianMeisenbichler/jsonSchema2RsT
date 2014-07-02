@@ -19,13 +19,13 @@ class jsonschematorst:
         if schema is None:
             schema=self.schema
         if jsonpath=='': 
-            jsonpath+=":ref:`#/ <root>` "
+            jsonpath+=":ref:`# <root>` "
         RsT=''
         if '$schema'in schema:
             RsT+=".. raw:: html\n\n    <style> .red {color:red} </style>\n\n"
             RsT+=".. role:: red\n\n.. _root:"
             
-            RsT+="\n\n=======================\nJSON Configuration File\n=======================\n\n"
+            RsT+="\n\n\nJSON Configuration File\n=======================\n\n"
             RsT+=".. _required:\n\n The ':red:`*`' signifies a required Field.\n\n"
             
         
@@ -34,6 +34,10 @@ class jsonschematorst:
         if 'properties'in schema:
             subschema=schema['properties']
             RsT+=self.makesection(subschema,jsonpath)
+        if 'items' in schema:
+            for item in schema['items']:
+                if 'properties'in item:
+                    RsT+=self.makesection(item['properties'], jsonpath+'[0]')
         elif 'oneOf'in schema:
             subschema=schema['oneOf']
             for oneschema in subschema:  
@@ -123,10 +127,24 @@ class jsonschematorst:
 
     def arraytoRST(self,typedic):
         rst=u''
-        rst+=':Type:\n  array('+str(typedic['maxItems'])+')'
+        rst+=':Type:\n  array('
+        if 'maxItems' in typedic:
+            rst+=str(typedic['maxItems'])
+        rst+=')'
         rst+=" items: "
         for item in typedic['items']:
-            rst+=item['type']+" "
+            if item["type"]=="object":
+                rst+="{"
+                count=1
+                for p in item['properties']:
+                    rst+=":ref:`"+p+'`'
+                 
+                    if count!= len(item['properties']):
+                        rst+=", "
+                    count+=1
+                rst+='}'
+            else:
+                rst+=item['type']+" "
             
         return rst
     def printdesc(self,desc):
