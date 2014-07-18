@@ -24,8 +24,6 @@ class jsonschematorst:
         if '$schema'in schema:
             RsT+=".. raw:: html\n\n    <style> .red {color:red} </style>\n\n"
             RsT+=".. role:: red\n\n.. _root:"
-            
-            RsT+="\n\n\nJSON Configuration File\n=======================\n\n"
             RsT+=".. _required:\n\n The ':red:`*`' signifies a required Field.\n\n"
             
         
@@ -67,7 +65,7 @@ class jsonschematorst:
                 rst+=':type:\n  object\n\n'
             rst+='\n'
             if 'enum' in typedic:
-                rst+=":values:\n  "+str(typedic["enum"])+"\n\n"
+                rst+=":values:\n  ``"+str(typedic["enum"])+"``\n\n"
             if 'properties' in typedic:
                 rst+=":Contains:\n  " 
                 proploop=0
@@ -121,10 +119,42 @@ class jsonschematorst:
                     
                  
             
-            rst+=":JSON Path:\n  "+jsonpath+"\n"
-           
+            rst+=":JSON Path:\n  * "+jsonpath+"\n"
+            if jsonpath.startswith("//"):
+                if "id" in typedic:
+                    print self.jsonPathAllRefsTothis(typedic['id'])
+                    rst+="  * "+"\n  * ".join(self.jsonPathAllRefsTothis(typedic['id']) )
         return rst
-
+    def jsonPathAllRefsTothis(self,idst):
+        path="/"
+        return self.walkpathsWref(self.schema['properties'],idst,path)+self.walkpathsWref(self.schema['definitions'],idst,"//")
+    
+    
+    def walkpathsWref(self,schema,idst,path):
+            pathlist=[]
+         
+            for key in schema:
+                if 'properties' in schema[key]:
+                    npath=self.addkeytojsonpath(path, key, self.getid(schema, key))
+                    if "properties" in schema[key]:
+                        pathlist=pathlist+(self.walkpathsWref(schema[key]['properties'],idst,npath))
+                    
+                if  "$ref" in schema[key]:
+                    if schema[key]['$ref']==idst:
+                        npath=self.addkeytojsonpath(path, key, self.getid(schema, key))
+                        pathlist.append(npath)
+                
+            return pathlist
+        
+    def searchkeyrecursive(self,mydict,searchkey):
+        found=False
+        for key in mydict:
+            if key==searchkey:
+                return True
+            print type(mydict[key])
+            if type(mydict[key])=="<class 'collections.OrderedDict'>":
+                found= self.searchkeyrecursive(mydict[key],searchkey)
+        return found
     def arraytoRST(self,typedic):
         rst=u''
         rst+=':Type:\n  array('
@@ -232,7 +262,7 @@ class jsonschematorst:
                         else:
                             if 'minItems'in schema:
                                 return range(schema['minItems'])
-                    if schema['type']=="bool":
+                    if schema['type']=="boolean":
                         if 'default'in schema:
                             return schema["default"]
                         else:
@@ -250,7 +280,7 @@ class jsonschematorst:
                
         return RsT   
     def refstoRST(self):
-            jsonpath=""
+            jsonpath="//"
             return self.makesection(self.schema['definitions'],jsonpath)
     def resolveref(self,ref):
         
