@@ -124,6 +124,9 @@ class jsonschematorst:
                 if "id" in typedic:
                     print self.jsonPathAllRefsTothis(typedic['id'])
                     rst+="  * "+"\n  * ".join(self.jsonPathAllRefsTothis(typedic['id']) )
+            if "appinfo" in typedic:
+                if "oldsymbol" in typedic['appinfo']:
+                    rst+=":Old Symbol:\n  ``"+typedic['appinfo']['oldsymbol']+"``\n"
         return rst
     def jsonPathAllRefsTothis(self,idst):
         path="/"
