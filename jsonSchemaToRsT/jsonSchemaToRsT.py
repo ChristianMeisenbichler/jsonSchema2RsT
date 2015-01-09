@@ -12,18 +12,18 @@ class jsonschematorst:
                                     open(schemapath),
                                     object_pairs_hook=collections.OrderedDict
                                     )
-    def toRsT(self,schema=None, jsonpath='',key=''):
+    def toRsT(self,schema=None, jsonpath='',key='',rootref="root"):
         """
         converts subschema to RST Markup
         """
         if schema is None:
             schema=self.schema
         if jsonpath=='': 
-            jsonpath+=":ref:`# <root>` "
+            jsonpath+=":ref:`# <"+rootref+">` "
         RsT=''
         if '$schema'in schema:
             RsT+=".. raw:: html\n\n    <style> .red {color:red} </style>\n\n"
-            RsT+=".. role:: red\n\n.. _root:"
+            RsT+=".. role:: red\n\n:"
             RsT+=".. _required:\n\n The ':red:`*`' signifies a required Field.\n\n"
             
         
@@ -33,9 +33,10 @@ class jsonschematorst:
             subschema=schema['properties']
             RsT+=self.makesection(subschema,jsonpath)
         if 'items' in schema:
-            for item in schema['items']:
-                if 'properties'in item:
-                    RsT+=self.makesection(item['properties'], jsonpath+'[0]')
+            
+            item = schema['items']
+            if 'properties'in item:
+                RsT+=self.makesection(item['properties'], jsonpath+'[0]')
         elif 'oneOf'in schema:
             subschema=schema['oneOf']
             for oneschema in subschema:  
@@ -58,7 +59,10 @@ class jsonschematorst:
                 if typedic['type']=='array':
                         rst+=self.arraytoRST(typedic)
                 else:
-                    rst+=":Type:\n  "+typedic['type']
+                    if not isinstance(typedic['type'], list):
+                        rst+=":Type:\n  "+typedic['type']
+                    else:
+                        rst+=":Type:\n  "+" or ".join(typedic['type'])
                     if 'units'in typedic:
                         rst+=" in "+ typedic['units']
             else:
@@ -165,18 +169,20 @@ class jsonschematorst:
             rst+=str(typedic['maxItems'])
         rst+=')'
         rst+=" items: "
-        for item in typedic['items']:
-            if item["type"]=="object":
-                rst+="{"
-                count=1
-                for p in item['properties']:
-                    rst+=":ref:`"+p+'`'
-                 
-                    if count!= len(item['properties']):
-                        rst+=", "
-                    count+=1
-                rst+='}'
-            else:
+        print json.dumps(typedic['items'])
+        item = typedic['items']
+        if  "type" in item and item["type"]=="object":
+            rst+="{"
+            count=1
+            for p in item['properties']:
+                rst+=":ref:`"+p+'`'
+             
+                if count!= len(item['properties']):
+                    rst+=", "
+                count+=1
+            rst+='}'
+        else:
+            if "type" in item :
                 rst+=item['type']+" "
             
         return rst
@@ -262,9 +268,10 @@ class jsonschematorst:
                     if schema['type']=="array":
                         if 'default'in schema:
                             return schema["default"]
+                        elif 'minItems'in schema:
+                            return range(schema['minItems'])
                         else:
-                            if 'minItems'in schema:
-                                return range(schema['minItems'])
+                            return []
                     if schema['type']=="boolean":
                         if 'default'in schema:
                             return schema["default"]
@@ -283,8 +290,11 @@ class jsonschematorst:
                
         return RsT   
     def refstoRST(self):
+        if 'definitions' in self.schema:
             jsonpath="//"
             return self.makesection(self.schema['definitions'],jsonpath)
+        else:
+            return ""
     def resolveref(self,ref):
         
         for key in self.schema['definitions']:
