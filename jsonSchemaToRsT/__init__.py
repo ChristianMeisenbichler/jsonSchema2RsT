@@ -1,1 +1,1 @@
-from jsonSchemaToRsT import *
+from jsonSchemaToRsT.main import jsonschematorst

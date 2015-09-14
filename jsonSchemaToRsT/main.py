@@ -6,12 +6,9 @@
 import json
 import collections
 class jsonschematorst:
-    def __init__(self,schemapath):
-        
-        self.schema=json.load(
-                                    open(schemapath),
-                                    object_pairs_hook=collections.OrderedDict
-                                    )
+    def __init__(self,schema,headerline="-"):
+        self.headerlinechar=headerline
+        self.schema= schema
     def toRsT(self,schema=None, jsonpath='',key='',rootref="root"):
         """
         converts subschema to RST Markup
@@ -73,7 +70,7 @@ class jsonschematorst:
             if 'properties' in typedic:
                 rst+=":Contains:\n  " 
                 proploop=0
-                for prop in typedic['properties'].keys():
+                for prop in list(typedic['properties'].keys()):
                     if "$ref" in typedic['properties'][prop]:
                         rst+=':ref:`'+prop+"<"+typedic['properties'][prop]['$ref']+">`"
                     else:
@@ -82,7 +79,7 @@ class jsonschematorst:
                         if typedic['properties'][prop]['required']:
                             rst+=":red:`*`"
                     proploop+=1
-                    if proploop!=len(typedic['properties'].keys()):
+                    if proploop!=len(list(typedic['properties'].keys())):
                         rst+=', '
                     else:
                         rst+='\n'
@@ -93,7 +90,7 @@ class jsonschematorst:
                 proploop=0
                 for oneofschema in typedic['oneOf']:
                     if 'properties'in oneofschema:
-                        for key in oneofschema['properties'].keys():
+                        for key in list(oneofschema['properties'].keys()):
                           
                             if key!="comment":
                                 proploop+=1    
@@ -126,7 +123,7 @@ class jsonschematorst:
             rst+=":JSON Path:\n  * "+jsonpath+"\n"
             if jsonpath.startswith("//"):
                 if "id" in typedic:
-                    print self.jsonPathAllRefsTothis(typedic['id'])
+                    print(self.jsonPathAllRefsTothis(typedic['id']))
                     rst+="  * "+"\n  * ".join(self.jsonPathAllRefsTothis(typedic['id']) )
             if "appinfo" in typedic:
                 if "oldsymbol" in typedic['appinfo']:
@@ -158,18 +155,18 @@ class jsonschematorst:
         for key in mydict:
             if key==searchkey:
                 return True
-            print type(mydict[key])
+            print(type(mydict[key]))
             if type(mydict[key])=="<class 'collections.OrderedDict'>":
                 found= self.searchkeyrecursive(mydict[key],searchkey)
         return found
     def arraytoRST(self,typedic):
-        rst=u''
+        rst=''
         rst+=':Type:\n  array('
         if 'maxItems' in typedic:
             rst+=str(typedic['maxItems'])
         rst+=')'
         rst+=" items: "
-        print json.dumps(typedic['items'])
+        print(json.dumps(typedic['items']))
         item = typedic['items']
         if  "type" in item and item["type"]=="object":
             rst+="{"
@@ -238,7 +235,7 @@ class jsonschematorst:
                     dictype ={} 
                     if 'properties' in schema:
                         for key in schema["properties"]:
-                            print key
+                            print(key)
                             if "$ref" in schema["properties"][key]:
                                 if "required" in schema["properties"][key]:
                                     if schema["properties"][key]["required"]:
@@ -248,7 +245,7 @@ class jsonschematorst:
                                 if schema["properties"][key]["required"]:
                                     dictype[key]=self.gentypeexample(schema["properties"][key],key)
                             if 'default' in schema:
-                                print "+++++++++++++++++++++++default",key 
+                                print("+++++++++++++++++++++++default",key) 
                                 if schema['default'] ==key:
                                     dictype[key]=self.gentypeexample(schema["properties"][key],key)
                                    
@@ -269,7 +266,7 @@ class jsonschematorst:
                         if 'default'in schema:
                             return schema["default"]
                         elif 'minItems'in schema:
-                            return range(schema['minItems'])
+                            return list(range(schema['minItems']))
                         else:
                             return []
                     if schema['type']=="boolean":
@@ -283,9 +280,9 @@ class jsonschematorst:
     
     def makesection(self,oneschema,jsonpath):
         RsT=""
-        for key in oneschema.keys():
+        for key in list(oneschema.keys()):
             if not '$ref' in oneschema[key]:
-                RsT+=".. _"+self.getid(oneschema,key)+':\n\n'+key+"\n"+"--------------------\n\n"
+                RsT+=".. _"+self.getid(oneschema,key)+':\n\n'+key+"\n"+(self.headerlinechar*20)+"\n\n"
                 RsT+=self.toRsT(schema=oneschema[key],key=key,jsonpath=self.addkeytojsonpath(jsonpath,key,self.getid(oneschema,key)))
                
         return RsT   
